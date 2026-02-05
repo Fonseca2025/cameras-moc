@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#004085">
+    <title>Monitoramento MOC</title>
+    <style>
+        :root {
+            --primary: #004085;
+            --bg: #f0f2f5;
+            --surface: #ffffff;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body { 
+            font-family: sans-serif; 
+            background-color: var(--bg); 
+            margin: 0; 
+            padding-top: 135px; /* Espaço para o cabeçalho fixo */
+        }
+
+        /* Cabeçalho Fixo */
+        header { 
+            background: var(--primary); 
+            color: white; 
+            position: fixed; 
+            top: 0; width: 100%; z-index: 1000;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            padding: 10px;
+        }
+
+        .header-title { text-align: center; font-size: 18px; font-weight: bold; margin-bottom: 10px; }
+
+        /* Busca */
+        #searchBar {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: none;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            font-size: 16px;
+            outline: none;
+        }
+        #searchBar::placeholder { color: rgba(255,255,255,0.6); }
+
+        /* Categorias */
+        .tabs {
+            background: white;
+            display: flex;
+            overflow-x: auto;
+            padding: 10px;
+            gap: 8px;
+            position: fixed;
+            top: 85px;
+            width: 100%;
+            z-index: 999;
+            border-bottom: 1px solid #ddd;
+        }
+        .tab {
+            padding: 6px 15px;
+            background: #eee;
+            border-radius: 20px;
+            border: none;
+            font-size: 12px;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        .tab.active { background: var(--primary); color: white; }
+
+        /* Grade de Câmeras */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            padding: 15px;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .btn-cam {
+            background: var(--surface);
+            border: 1px solid #ddd;
+            aspect-ratio: 1/1;
+            border-radius: 12px;
+            font-size: 20px;
+            font-weight: bold;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .btn-cam:active { background: #e9ecef; transform: scale(0.9); }
+
+        /* Pop-up (Modal) */
+        #modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            z-index: 2000;
+            align-items: center; justify-content: center;
+            padding: 20px;
+        }
+        .modal-box {
+            background: white;
+            width: 100%;
+            max-width: 320px;
+            padding: 25px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        #m-title { font-size: 20px; font-weight: bold; margin-bottom: 15px; color: var(--primary); }
+        #m-body { font-size: 16px; font-weight: bold; text-transform: uppercase; margin-bottom: 25px; line-height: 1.4; }
+        .m-btn { background: var(--primary); color: white; border: none; width: 100%; padding: 12px; border-radius: 10px; font-weight: bold; }
+
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="header-title">SISTEMA CÂMERAS MOC</div>
+    <input type="text" id="searchBar" placeholder="Buscar por rua ou número..." onkeyup="filtrar()">
+</header>
+
+<div class="tabs">
+    <button class="tab active" onclick="filtrarCat('TUDO', this)">TUDO</button>
+    <button class="tab" onclick="filtrarCat('CENTRO', this)">CENTRO</button>
+    <button class="tab" onclick="filtrarCat('TREVO', this)">TREVOS</button>
+    <button class="tab" onclick="filtrarCat('SAÍDA', this)">SAÍDAS</button>
+</div>
+
+<div class="grid" id="mainGrid"></div>
+
+<div id="modal">
+    <div class="modal-box">
+        <div id="m-title"></div>
+        <div id="m-body"></div>
+        <button class="m-btn" onclick="fechar()">OK</button>
+    </div>
+</div>
+
+<script>
+    // BANCO DE DADOS COMPLETO COM TODAS AS 71 CÂMERAS
+    const cameras = {
+        1: {loc: "PCA DR CARLOS frente Min Fazenda", cat: "CENTRO"},
+        2: {loc: "PCA DR CARLOS frente Copasa", cat: "CENTRO"},
+        3: {loc: "DR. SANTOS X PE. AUGUSTO", cat: "CENTRO"},
+        4: {loc: "DR. SANTOS X D. PEDRO II", cat: "CENTRO"},
+        5: {loc: "DR. SANTOS X D. JOÃO PIMENTA", cat: "CENTRO"},
+        6: {loc: "PCA CEL. RIBEIRO", cat: "CENTRO"},
+        7: {loc: "R. CAMILO P. X D. PEDRO II", cat: "CENTRO"},
+        8: {loc: "R. CAMILO P. X PE. AUGUSTO", cat: "CENTRO"},
+        9: {loc: "PCA DR CARLOS", cat: "CENTRO"},
+        10: {loc: "R. SÃO FRANC. X GOV. VALADARES", cat: "CENTRO"},
+        11: {loc: "R. SÃO FRANC. X CEL. ANT. D. ANJOS", cat: "CENTRO"},
+        12: {loc: "R. SÃO FRANC. X RUI BARBOSA", cat: "CENTRO"},
+        13: {loc: "R. SÃO FRANC. X PE. AUGUSTO", cat: "CENTRO"},
+        14: {loc: "R. SÃO FRANC. X D. PEDRO II", cat: "CENTRO"},
+        15: {loc: "PCA PIO XII - CATEDRAL", cat: "CENTRO"},
+        16: {loc: "JUCA PRATES X PE. AUGUSTO", cat: "CENTRO"},
+        17: {loc: "R. JOAQ COSTA X CEL. ANT. D. ANJOS", cat: "CENTRO"},
+        18: {loc: "R. JOAQ COSTA X VISC. DE OURO P.", cat: "CENTRO"},
+        19: {loc: "AV. OSV. CRUZ X PADRE CHICO", cat: "OUTROS"},
+        20: {loc: "AV. DULCE SARM. X FLAM. WANDER", cat: "OUTROS"},
+        21: {loc: "AV. DULCE SARM. X SEB DIAS SOARES", cat: "OUTROS"},
+        22: {loc: "AV. DULCE SARM. X FLORI. NEIVA", cat: "OUTROS"},
+        23: {loc: "AV. GER ATHAIDE X EST. RODRIG.", cat: "OUTROS"},
+        24: {loc: "AV. GER ATHAIDE X CEL J ALVES", cat: "OUTROS"},
+        25: {loc: "AV. GER ATHAIDEX X J LOPES CARV.", cat: "OUTROS"},
+        26: {loc: "Lafetá com rua sao Francisco", cat: "CENTRO"},
+        27: {loc: "PRAÇA MATRIZ PROX BABI", cat: "CENTRO"},
+        28: {loc: "R. FLORIA. NEIVA X JUST. CÂMARA", cat: "OUTROS"},
+        29: {loc: "AV, ARMENIO VEL. X FILOMENO", cat: "OUTROS"},
+        30: {loc: "PE. TEIXEIRA X AV. ARMENIO VELOS.", cat: "OUTROS"},
+        31: {loc: "MAL. DEODORO X ARTUR BERNAR", cat: "OUTROS"},
+        32: {loc: "DEP. ESTEVES RODR X JOAO XXIII", cat: "OUTROS"},
+        33: {loc: "JOAO XXIII ANTIGA UAI", cat: "OUTROS"},
+        34: {loc: "JOAO XXIII X PRES KENEDY", cat: "OUTROS"},
+        35: {loc: "DOUTOR VELOSO X DOM PEDRO II", cat: "CENTRO"},
+        36: {loc: "PRES. VARGAS X DOUTOR VELOSO", cat: "CENTRO"},
+        37: {loc: "GOV. VALAD. X CEL. PRATES", cat: "CENTRO"},
+        38: {loc: "SIMEAO RIBEIRO X ALT FREITAS", cat: "CENTRO"},
+        39: {loc: "SIMEAO RIBEIRO X LAFETA", cat: "CENTRO"},
+        40: {loc: "SANTA MARIA X GONC FIGUEIRA", cat: "OUTROS"},
+        41: {loc: "SANTA MARIA X DEP ESTEVES RODR.", cat: "OUTROS"},
+        42: {loc: "DEP EST. RODRIG CASA ESFIRRA", cat: "OUTROS"},
+        43: {loc: "SANTA MARIA X SANTO ANTONIO", cat: "OUTROS"},
+        44: {loc: "BAR. RIO BRANCO X AFONSO PENA", cat: "CENTRO"},
+        45: {loc: "AV. CEL PRATES PRAÇA STA CASA", cat: "CENTRO"},
+        46: {loc: "ALL TIME", cat: "OUTROS"},
+        47: {loc: "DEP EST. RODRIGUES X PREFEIT", cat: "OUTROS"},
+        48: {loc: "CULA MANGAB. HU", cat: "OUTROS"},
+        49: {loc: "CULA X JOAO REBELO", cat: "OUTROS"},
+        50: {loc: "TREV. RODOVIARIA BANCO BRASIL", cat: "TREVO"},
+        51: {loc: "RODOVIARIA DROGASIL", cat: "OUTROS"},
+        52: {loc: "FCO GAETANI X CASTELAR PRAT.", cat: "OUTROS"},
+        53: {loc: "PARQ. DE EXPOS X LINHA FERREA", cat: "OUTROS"},
+        54: {loc: "LAGOA DE INTERLAGOS", cat: "OUTROS"},
+        55: {loc: "TREVO DA SION", cat: "TREVO"},
+        56: {loc: "TREVO SAMU", cat: "TREVO"},
+        57: {loc: "TREVO MAJOR PRATES - PARQUE", cat: "TREVO"},
+        58: {loc: "JOÃO XXIII x PADRE FABIANO", cat: "OUTROS"},
+        59: {loc: "TREVO INDUSTRIAS", cat: "TREVO"},
+        60: {loc: "SAIDA BR365", cat: "SAÍDA"},
+        61: {loc: "SAIDA ESTR. PRODUÇÃO", cat: "SAÍDA"},
+        62: {loc: "SAIDA BR251", cat: "SAÍDA"},
+        63: {loc: "SAIDA MG308", cat: "SAÍDA"},
+        64: {loc: "SAIDA BR135", cat: "SAÍDA"},
+        65: {loc: "BR135 ANEL ROD", cat: "SAÍDA"},
+        66: {loc: "SAIDA", cat: "SAÍDA"},
+        67: {loc: "RODOVIARIA", cat: "OUTROS"},
+        68: {loc: "VICENTE GUIMA", cat: "OUTROS"},
+        69: {loc: "PL RIB X CEL L MAIA", cat: "OUTROS"},
+        70: {loc: "PREFEITURA NOVA", cat: "OUTROS"},
+        71: {loc: "TREVO TROPEIROS", cat: "TREVO"}
+    };
+
+    const grid = document.getElementById('mainGrid');
+
+    // Renderiza botões
+    for (let i = 1; i <= 71; i++) {
+        const btn = document.createElement('button');
+        btn.className = 'btn-cam';
+        btn.innerText = i;
+        btn.setAttribute('data-loc', cameras[i].loc.toUpperCase());
+        btn.setAttribute('data-cat', cameras[i].cat);
+        btn.onclick = () => ver(i);
+        grid.appendChild(btn);
+    }
+
+    function ver(id) {
+        // Vibração no Android
+        if (navigator.vibrate) navigator.vibrate(40);
+        
+        document.getElementById('m-title').innerText = "CÂMERA " + id;
+        document.getElementById('m-body').innerText = cameras[id].loc.toUpperCase();
+        document.getElementById('modal').style.display = "flex";
+    }
+
+    function fechar() {
+        document.getElementById('modal').style.display = "none";
+    }
+
+    function filtrar() {
+        const termo = document.getElementById('searchBar').value.toUpperCase();
+        document.querySelectorAll('.btn-cam').forEach(btn => {
+            const loc = btn.getAttribute('data-loc');
+            const num = btn.innerText;
+            btn.classList.toggle('hidden', !(loc.includes(termo) || num === termo));
+        });
+    }
+
+    function filtrarCat(cat, el) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        el.classList.add('active');
+        document.querySelectorAll('.btn-cam').forEach(btn => {
+            if (cat === 'TUDO') btn.classList.remove('hidden');
+            else btn.classList.toggle('hidden', btn.getAttribute('data-cat') !== cat);
+        });
+    }
+</script>
+
+</body>
+</html>
